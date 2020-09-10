@@ -68,7 +68,7 @@
 // 160 steps diveded by 2 is 80 steps in each direction, adding a buffer i used 90
 // also by using the controller_test.rom on official hardware, ive found that most controllers report closer to 90-100 anyway
 //
-#define JOY_MAX_REPORT 90
+#define JOY_MAX_REPORT 90 // 127 for full 8 bit data
 
 int JOY_X_MIN = 0;    // will be calculated later in CalStick()
 int JOY_X_MAX = 1023; // will be calculated later in CalStick()
