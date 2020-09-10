@@ -65,7 +65,8 @@
 // that controllers only have 160 steps on them and I've had games which screw
 // up when given the full 8 bit range.
 //
-// 180 steps diveded by 2 is 90 steps in each direction
+// 160 steps diveded by 2 is 80 steps in each direction, adding a buffer i used 90
+// also by using the controller_test.rom on official hardware, ive found that most controllers report closer to 90-100 anyway
 //
 #define JOY_MAX_REPORT 90
 
