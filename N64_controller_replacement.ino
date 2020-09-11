@@ -48,7 +48,7 @@
 #define BTN_C_RIGHT   5
 #define BTN_L         9
 #define BTN_R         A0
-#define BTN_Z         5
+#define BTN_Z         11
 #define PAD_UP        6
 #define PAD_DOWN      7
 #define PAD_LEFT      A5
@@ -148,15 +148,27 @@ void ReadInputs(void)
     memset(n64_buffer, 0, sizeof(n64_buffer));
 
     // buttons
-    for (int i = 0; i < 8; i ++)
-    {
-      // First byte in n64_buffer should contain:
-      // A, B, Z, Start, Dup, Ddown, Dleft, Dright
-      bitWrite(n64_buffer[0], i, !digitalRead(btn[i]));
-      // Second byte to N64 should contain:
-      // 0, 0, L, R, Cup, Cdown, Cleft, Cright
-      bitWrite( n64_buffer[1], i, ( i<2 ? 0 : !digitalRead(btn[i+8]) ) );
-    }
+    // First byte in n64_buffer should contain:
+    // A, B, Z, Start, Dup, Ddown, Dleft, Dright
+    bitWrite(n64_buffer[0], 7, !digitalRead(btn[0]));
+    bitWrite(n64_buffer[0], 6, !digitalRead(btn[1]));
+    bitWrite(n64_buffer[0], 5, !digitalRead(btn[2]));
+    bitWrite(n64_buffer[0], 4, !digitalRead(btn[3]));
+    bitWrite(n64_buffer[0], 3, !digitalRead(btn[4]));
+    bitWrite(n64_buffer[0], 2, !digitalRead(btn[5]));
+    bitWrite(n64_buffer[0], 1, !digitalRead(btn[6]));
+    bitWrite(n64_buffer[0], 0, !digitalRead(btn[7]));
+    
+    // Second byte to N64 should contain:
+    // 0, 0, L, R, Cup, Cdown, Cleft, Cright
+    //bitWrite(n64_buffer[1], 7, 0);
+    //bitWrite(n64_buffer[1], 6, 0);
+    bitWrite(n64_buffer[1], 5, !digitalRead(btn[8]));
+    bitWrite(n64_buffer[1], 4, !digitalRead(btn[9]));
+    bitWrite(n64_buffer[1], 3, !digitalRead(btn[10]));
+    bitWrite(n64_buffer[1], 2, !digitalRead(btn[11]));
+    bitWrite(n64_buffer[1], 1, !digitalRead(btn[12]));
+    bitWrite(n64_buffer[1], 0, !digitalRead(btn[13]));
 
     // Third byte: Control Stick X position
     n64_buffer[2] = -zero_x + GetStick_x();
