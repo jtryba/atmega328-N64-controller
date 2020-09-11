@@ -51,7 +51,7 @@
 #define BTN_Z         5
 #define PAD_UP        6
 #define PAD_DOWN      7
-#define PAD_LEFT      8
+#define PAD_LEFT      A5
 #define PAD_RIGHT     A3
 #define BTN_START     A4
 
@@ -105,7 +105,7 @@ signed int GetStick_y(void);
 
 void setup()
 {
-  Serial.begin(115200);
+  Serial.begin(9600);
 
   Serial.println();
   Serial.println("Setup has started!");
@@ -155,7 +155,7 @@ void ReadInputs(void)
       bitWrite(n64_buffer[0], i, !digitalRead(btn[i]));
       // Second byte to N64 should contain:
       // 0, 0, L, R, Cup, Cdown, Cleft, Cright
-      bitWrite( n64_buffer[1], i, ( (i == 0 || i == 1) ? 0 : !digitalRead(btn[i+6]) ) );
+      bitWrite( n64_buffer[1], i, ( i<2 ? 0 : !digitalRead(btn[i+8]) ) );
     }
 
     // Third byte: Control Stick X position
