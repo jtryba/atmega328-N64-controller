@@ -174,6 +174,10 @@ void ReadInputs(void)
     // Fourth byte: Control Stick Y Position
     n64_buffer[3] = -zero_y + GetStick_y();
 
+    // TODO remove this after testing
+    n64_buffer[2] = 0;
+    n64_buffer[3] = 0;
+
     /*
     char buf[32];
     memset(buf, 0, 32);
