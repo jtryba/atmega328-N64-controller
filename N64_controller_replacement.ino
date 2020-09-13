@@ -33,11 +33,11 @@
 #define N64_QUERY (PINB & 0x01)
 
 // were using a PWM signal to control the rumble motor in order to save battery
-#define RUMBLE_FORCE  128 //0-255
+#define RUMBLE_FORCE  100 //0-255
 
 #define BUTTON_COUNT  14
 #define JOY_DEAD      7
-#define JOY_RANGE     500 // 1023/2 rounded a bit
+#define JOY_RANGE     400 // 1023 * 0.4 rounded a bit
 #define JOY_X         A1
 #define JOY_Y         A2
 #define BTN_A         0
@@ -101,20 +101,25 @@ void CalStick(void);
 signed int GetStick_x(void);
 signed int GetStick_y(void);
 
+static bool rumble = false;
+
 #include "crc_table.h"
 
 void setup()
 {
-  Serial.begin(9600);
+  // Communication with the N64 on this pin
+  digitalWrite(N64_PIN, LOW);
+  pinMode(N64_PIN, INPUT);
 
-  Serial.println();
-  Serial.println("Setup has started!");
-  Serial.flush();
-
-  // Status LED
   digitalWrite(13, LOW);
   pinMode(13, OUTPUT);
 
+  /*
+  Serial.begin(9600);
+  Serial.println();
+  Serial.println("Setup has started!");
+  */
+  
   // setup I/O
   // stick
   pinMode(JOY_X, INPUT);
@@ -131,15 +136,9 @@ void setup()
   digitalWrite(RUMBLE_PIN, LOW);
   pinMode(RUMBLE_PIN, OUTPUT);
 
-  // Communication with the N64 on this pin
-  digitalWrite(N64_PIN, LOW);
-  pinMode(N64_PIN, INPUT);
-
   CalStick();
   
-  Serial.println();
-  Serial.println("Code has started!");
-  Serial.flush();
+  //Serial.println("Code has started!");
 }
 
 void ReadInputs(void)
@@ -174,12 +173,40 @@ void ReadInputs(void)
     n64_buffer[2] = -zero_x + GetStick_x();
     // Fourth byte: Control Stick Y Position
     n64_buffer[3] = -zero_y + GetStick_y();
+
+    /*
+    char buf[32];
+    memset(buf, 0, 32);
+    sprintf(buf, "0x%d%d%d%d%d%d%d%d%d%d%d%d%d%d",
+      bitRead(n64_buffer[0], 7),
+      bitRead(n64_buffer[0], 6),
+      bitRead(n64_buffer[0], 5),
+      bitRead(n64_buffer[0], 4),
+      bitRead(n64_buffer[0], 3),
+      bitRead(n64_buffer[0], 2),
+      bitRead(n64_buffer[0], 1),
+      bitRead(n64_buffer[0], 0),
+      bitRead(n64_buffer[1], 5),
+      bitRead(n64_buffer[1], 4),
+      bitRead(n64_buffer[1], 3),
+      bitRead(n64_buffer[1], 2),
+      bitRead(n64_buffer[1], 1),
+      bitRead(n64_buffer[1], 0)
+    );
+    Serial.print(buf);
+    Serial.print(" ");
+    Serial.print(n64_buffer[2], HEX);
+    Serial.print(" ");
+    Serial.print(n64_buffer[3], HEX);
+    Serial.print(" ");
+    Serial.println(rumble, HEX);
+    */
 }
 
 void CalStick(void)
 {
-  Serial.println("Calibrating analog stick...");
-  Serial.flush();
+  //Serial.println("Calibrating analog stick...");
+  
   int t = 5;
   int x = 0;
   int y = 0;
@@ -192,25 +219,27 @@ void CalStick(void)
   int center_x = x/t;
   int center_y = y/t;
   
-  JOY_X_MIN = center_x-JOY_RANGE;
-  JOY_X_MAX = center_x+JOY_RANGE;
-  JOY_Y_MIN = center_y-JOY_RANGE;
-  JOY_Y_MAX = center_y+JOY_RANGE;
+  JOY_X_MIN = constrain(center_x-JOY_RANGE, 0, 1023);
+  JOY_X_MAX = constrain(center_x+JOY_RANGE, 0, 1023);
+  JOY_Y_MIN = constrain(center_y-JOY_RANGE, 0, 1023);
+  JOY_Y_MAX = constrain(center_y+JOY_RANGE, 0, 1023);
 
   zero_x = GetStick_x();
   zero_y = GetStick_y();
 
+  /*
+  Serial.print("Center x: ");
+  Serial.println(center_x);
+  Serial.print("Center y: ");
+  Serial.println(center_y);
   Serial.println("Calibration complete!");
-  Serial.flush();
+  */
 }
 
 signed int GetStick_x(void)
 {    
   unsigned int l = analogRead(JOY_X);
-  if (l > JOY_X_MAX)
-    l = JOY_X_MAX;
-  if (l < JOY_X_MIN)
-    l = JOY_X_MIN;
+  l = constrain(l, JOY_X_MIN, JOY_X_MAX);
   signed int i = map(l, JOY_X_MIN, JOY_X_MAX, -JOY_MAX_REPORT, JOY_MAX_REPORT);
   if (i < JOY_DEAD && i > -JOY_DEAD)
     return 0;
@@ -220,25 +249,21 @@ signed int GetStick_x(void)
 signed int GetStick_y(void)
 {
   unsigned int l = analogRead(JOY_Y);
-  if (l > JOY_Y_MAX)
-    l = JOY_Y_MAX;
-  if (l < JOY_Y_MIN)
-    l = JOY_Y_MIN;
+  l = constrain(l, JOY_Y_MIN, JOY_Y_MAX);
   signed int i = map(l, JOY_Y_MIN, JOY_Y_MAX, -JOY_MAX_REPORT, JOY_MAX_REPORT);
   if (i < JOY_DEAD && i > -JOY_DEAD)
     return 0;
   return i;
 }
 
-static bool rumble = false;
 void loop()
 {
     int status;
     unsigned char data, addr;
 
     // control rumble motor
-    //digitalWrite(RUMBLE_PIN, rumble);
     analogWrite(RUMBLE_PIN, (rumble?RUMBLE_FORCE:0));
+    digitalWrite(13, rumble);
 
     ReadInputs();
 
@@ -255,7 +280,8 @@ void loop()
     switch (n64_command)
     {
         case 0xFF:
-          CalStick();
+            CalStick();
+            rumble = false;
         case 0x00:
             // identify
             // mutilate the n64_buffer array with our status
@@ -289,7 +315,6 @@ void loop()
             // be requesting anyways
             memset(n64_buffer, 0x80, 32);
             n64_buffer[32] = 0xB8; // CRC
-
             n64_send(n64_buffer, 33, 1);
 
             //Serial.println("It was 0x02: the read command");
@@ -338,16 +363,18 @@ void loop()
                 //To switch on the rumble pak motor, the N64 sends:
                 //03 C0 1B 01 01 01 ...
                 //This writes 01 to addresses starting at 0x4000.
+                
                 //To turn the motor back off, the N64 sends:
                 //03 C0 1B 00 00 00 ...
                 rumble = (data != 0);
             }
-
-            //Serial.println("It was 0x03: the write command");
-            //Serial.print("Addr was 0x");
-            //Serial.print(addr, HEX);
-            //Serial.print(" and data was 0x");
-            //Serial.println(data, HEX);
+            /*
+            Serial.println("It was 0x03: the write command");
+            Serial.print("Addr was 0x");
+            Serial.print(addr, HEX);
+            Serial.print(" and data was 0x");
+            Serial.println(data, HEX);
+            */
             break;
 
         default:
