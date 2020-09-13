@@ -1,6 +1,9 @@
 /**
  * Gamecube controller to Nintendo 64 adapter
  * by Andrew Brown
+ * https://github.com/brownan/Gamecube-N64-Controller/blob/master/gamecube.ino
+ * 
+ * 
  * Rewritten by jtryba so the atmega328 can be used as a stand alone replacement to the Nintendo CNT-NUS N64 controller chip, with built in rumble, for use in portables.
  * N64 controller protocol can be found here:
  * https://code.google.com/archive/p/micro-64-controller/wikis/Protocol.wiki
