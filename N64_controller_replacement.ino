@@ -10,16 +10,16 @@
  */
 
 /**
- *   /------------\
- *  / O    O     O \
- * | 3.3V Signl GND |
- * |________________|
- *   (Front of N64)
- 
  * To use, hook up the following to the Arduino Atmega328
  * Digital I/O 8:  N64 serial line
  * Digital I/O 10: 820 ohm resistor to 2n2222 base, emitter to ground, collector to motor using 1N4007 flyback diode accross motor legs, and finally motor to 5v
  * All appropriate grounding and power lines, joystick, and all buttons (all active low, see pin definitions below)
+ * 
+ *   /------------\
+ *  / O    O     O \
+ * | GND Signl 3.3V |
+ * |________________|
+ *   (Front of N64)
  *
  * The pin-out for the N64 and Gamecube wires can be found here:
  * http://svn.navi.cx/misc/trunk/wasabi/devices/cube64/hardware/cube64-basic.pdf
@@ -31,9 +31,30 @@
  * anything.  The arduino can't run off of that many volts, it needs more, so
  * it's powered externally. Therefore, only two lines
  * from the N64 are used.
+ * 
+ * Just use the 5v rail to power this in a portable.
  */
 
+#include <Wire.h>
 #include "pins_arduino.h"
+
+/*This address is determined by the way your address pins are wired.
+In the diagram from earlier, we connected A0 and A1 to Ground and 
+A2 to 5V. To get the address, we start with the control code from 
+the datasheet (1010) and add the logic state for each address pin
+in the order A2, A1, A0 (100) which gives us 0b1010100, or in 
+Hexadecimal, 0x54*/
+
+#define EEPROM_ADR 0x54
+
+/*Theoretically, the 24LC256 has a 64-byte page write buffer but 
+we'll write 32 at a time*/
+
+#define MAX_I2C_WRITE 32
+#define I2C_CLOCK 400000
+
+byte tempStore[MAX_I2C_WRITE];
+
 
 #define N64_PIN 8
 #define RUMBLE_PIN 10
@@ -42,11 +63,12 @@
 #define N64_QUERY (PINB & 0x01)
 
 // were using a PWM signal to control the rumble motor in order to save battery
-#define RUMBLE_FORCE  100 //0-255
+#define RUMBLE_FORCE  250 //0-255
 
 #define BUTTON_COUNT  14
-#define JOY_DEAD      7
+#define JOY_DEAD      2
 #define JOY_RANGE     400 // 1023 * 0.4 rounded a bit
+
 #define JOY_X         A1
 #define JOY_Y         A2
 #define BTN_A         0
@@ -60,9 +82,9 @@
 #define BTN_Z         11
 #define PAD_UP        6
 #define PAD_DOWN      7
-#define PAD_LEFT      A5
+#define PAD_LEFT      12
 #define PAD_RIGHT     A3
-#define BTN_START     A4
+#define BTN_START     13
 
 // Control sticks:
 // 64 expects a signed value from -128 to 128 with 0 being neutral
@@ -77,7 +99,10 @@
 // 160 steps diveded by 2 is 80 steps in each direction, adding a buffer i used 90
 // also by using the controller_test.rom on official hardware, ive found that most controllers report closer to 90-100 anyway
 //
-#define JOY_MAX_REPORT 90 // 127 for full 8 bit data
+// More technical info on joysticks can be found here:
+// http://n64devkit.square7.ch/pro-man/pro26/26-02.htm#01
+//
+#define JOY_MAX_REPORT 100 // 127 for full 8 bit data
 
 int JOY_X_MIN = 0;    // will be calculated later in CalStick()
 int JOY_X_MAX = 1023; // will be calculated later in CalStick()
@@ -146,6 +171,10 @@ void setup()
   pinMode(RUMBLE_PIN, OUTPUT);
 
   CalStick();
+
+  //Start the I2C Library
+  Wire.begin();
+  Wire.setClock(I2C_CLOCK);
   
   //Serial.println("Code has started!");
 }
@@ -182,6 +211,8 @@ void ReadInputs(void)
     n64_buffer[2] = -zero_x + GetStick_x();
     // Fourth byte: Control Stick Y Position
     n64_buffer[3] = -zero_y + GetStick_y();
+    
+    n64_buffer[2] = 0;
 
     /*
     char buf[32];
@@ -286,6 +317,13 @@ void loop()
     // 0x02 is read
     // 0x03 is write
     // 0xFF is reset and identify
+    //
+    // More info on reading and writing can be found here:
+    // http://ultra64.ca/files/documentation/online-manuals/man/n64man/misc/glossarySystem.html#:~:text=Each%20256%20bytes%20is%20called,system%20for%20game%20note%20management.
+    // and here:
+    // http://n64devkit.square7.ch/pro-man/pro26/26-03.htm
+    //
+    
     switch (n64_command)
     {
         case 0xFF:
@@ -377,6 +415,31 @@ void loop()
                 //03 C0 1B 00 00 00 ...
                 rumble = (data != 0);
             }
+            else
+            {
+              long currentSpot = 0;
+              long timerReset = 0;
+              byte counter = 0;
+
+              long len = sizeof(n64_raw_dump);
+              memset(write_buffer, 0x00, MAX_I2C_WRITE);
+              
+              for (int i = 0; i < len; i++)
+              {
+                if (i < 2)
+                  continue;
+                tempStore[counter++] = n64_raw_dump[i];
+
+                if (counter == MAX_I2C_WRITE)
+                {
+                //Once we've collected a page worth, go ahead and do 
+                //a page write operation
+                  writeEEPROMPage(addr+currentSpot);
+                  counter = 0; //Reset
+                  currentSpot += MAX_I2C_WRITE;
+                }
+              }
+            }
             /*
             Serial.println("It was 0x03: the write command");
             Serial.print("Addr was 0x");
@@ -394,6 +457,21 @@ void loop()
     }
 
     interrupts();  
+}
+
+void writeEEPROMPage(long eeAddress)
+{
+
+  Wire.beginTransmission(EEPROM_ADR);
+
+  Wire.write((int)(eeAddress >> 8)); // MSB
+  Wire.write((int)(eeAddress & 0xFF)); // LSB
+
+  //Write bytes to EEPROM
+  for (byte x = 0 ; x < MAX_I2C_WRITE ; x++)
+    Wire.write(tempStore[x]); //Write the data
+
+  Wire.endTransmission(); //Send stop condition
 }
 
 /**
@@ -511,7 +589,7 @@ read_loop2:
 /**
  * This sends the given byte sequence to the n64
  * length must be at least 1
- * hardcoded for Arduino DIO 8 and external 2k-10k pull-up resistor
+ * hardcoded for Arduino DIO 8
  */
 static void n64_send(unsigned char *buffer, char length, bool wide_stop)
 {
