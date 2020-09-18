@@ -971,6 +971,7 @@ inner_loop:
 
 }
 
+#ifdef USE_EEPROM
 /******************************************
    N64 Controller CRC Functions
  *****************************************/
@@ -1014,6 +1015,7 @@ static byte dataCRC(byte * data) {
   return ret;
 }
 */
+#endif
 
 #if defined(USE_ENCODER) && defined(USE_EEPROM)
 #  error "The atmega does not have enough pins to enable USE_ENCODER and USE_EEPROM simultaneously! The encoder makes use of the two I2C pins that are required by the EEPROM."
