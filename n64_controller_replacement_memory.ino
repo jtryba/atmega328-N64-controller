@@ -73,9 +73,7 @@
 #define N64_LOW DDRB |= 0x01
 #define N64_QUERY (PINB & 0x01)
 
-#if defined(ARDUINO_AVR_MICRO)       
-  #define BOARD "Micro"
-#elif defined(ARDUINO_AVR_MINI)       
+#if defined(ARDUINO_AVR_MINI)       
   #define BOARD "Mini"
 #elif defined(ARDUINO_AVR_NANO)       
   #define BOARD "Nano"
