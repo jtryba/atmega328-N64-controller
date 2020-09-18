@@ -10,6 +10,12 @@
  */
 
 /**
+ *   /------------\
+ *  / O    O     O \
+ * | 3.3V Signl GND |
+ * |________________|
+ *   (Front of N64)
+ 
  * To use, hook up the following to the Arduino Atmega328
  * Digital I/O 8:  N64 serial line
  * Digital I/O 10: 820 ohm resistor to 2n2222 base, emitter to ground, collector to motor using 1N4007 flyback diode accross motor legs, and finally motor to 5v
