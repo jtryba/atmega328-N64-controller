@@ -15,6 +15,7 @@
  * 
  *
  * Emulates a CPack using a 24LC256 32k I2C EEPROM
+ * http://ww1.microchip.com/downloads/en/DeviceDoc/24AA256-24LC256-24FC256-Data-Sheet-20001203W.pdf
  * Save manager can be found here:
  * https://bryc.github.io/mempak
  * The above link is where i got an empty cpack.N64 file from (CPack file)
@@ -60,22 +61,40 @@
  * Just use the 5v rail to power this in a portable.
  */
 
-//#define USE_ENCODER 1 // uncomment this line to use the orig n64 encoder
+//#define USE_ENCODER 1 // uncomment this line to use the orig n64 encoder, only nano supports this
 #define USE_EEPROM 1 // uncomment this line to use the 24LC256 to emulate a cpack
 
 #define F_CPU 16000000
 
 #define N64_PIN 8
 #define RUMBLE_PIN 10
+#define RUMBLE_FORCE  250 //0-255 were using a PWM signal to control rumble to save battery
 #define N64_HIGH DDRB &= ~0x01
 #define N64_LOW DDRB |= 0x01
 #define N64_QUERY (PINB & 0x01)
+
+#if defined(ARDUINO_AVR_MICRO)       
+  #define BOARD "Micro"
+#elif defined(ARDUINO_AVR_MINI)       
+  #define BOARD "Mini"
+#elif defined(ARDUINO_AVR_NANO)       
+  #define BOARD "Nano"
+#elif defined(ARDUINO_AVR_PRO)       
+  #define BOARD "Pro"
+#elif defined(ARDUINO_AVR_UNO)       
+    #define BOARD "Uno"
+#else
+   #error "Unsupported board"
+#endif
 
 #include <Wire.h>
 #include "pins_arduino.h"
 #include "crc_table.h"
 
 #ifdef USE_EEPROM
+  #if defined(ARDUINO_AVR_MINI)
+    #error("This is board does not support cpack emulation, not enough pins!")
+  #endif
   /*This address is determined by the way your address pins are wired.
   I connected A0 and A1 to Ground and A2 to 5V. To get the address,
   we start with the control code from the datasheet (1010) and add
@@ -93,16 +112,22 @@
   byte eepromData[I2C_PAGE];
 #endif
 
-// were using a PWM signal to control the rumble motor in order to save battery
-#define RUMBLE_FORCE  250 //0-255
-
 #ifdef USE_ENCODER
-  #define encoderIx A1
-  #define encoderQx A2
-  #define encoderIy A4
-  #define encoderQy A5
-  #define encoderX  // not enough pins
-  #define encoderY  // not enough pins
+  #if defined(USE_EEPROM)
+    #error("Can NOT enable USE_ENCODER and USE_EEPROM simultaneously! The encoder makes use of the two I2C pins that are required by the EEPROM.")
+  #endif
+  
+  #if defined(ARDUINO_AVR_NANO)
+    #define encoderIx A1
+    #define encoderQx A2
+    #define encoderIy A4 // I2C_SCL
+    #define encoderQy A5 // I2C_SDA
+    #define encoderX  A6
+    #define encoderY  A7
+  #else
+    #error("This is board does not support the encoder! Not enough pins, must use Arduino Nano.")
+  #endif
+  
   volatile signed int countx;
   volatile signed int county;
 #else
@@ -1015,8 +1040,4 @@ static byte dataCRC(byte * data) {
   return ret;
 }
 */
-#endif
-
-#if defined(USE_ENCODER) && defined(USE_EEPROM)
-#  error "The atmega does not have enough pins to enable USE_ENCODER and USE_EEPROM simultaneously! The encoder makes use of the two I2C pins that are required by the EEPROM."
 #endif
