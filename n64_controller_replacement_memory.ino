@@ -64,15 +64,6 @@
 //#define USE_ENCODER 1 // uncomment this line to use the orig n64 encoder, only nano supports this
 #define USE_EEPROM 1 // uncomment this line to use the 24LC256 to emulate a cpack
 
-#define F_CPU 16000000
-
-#define N64_PIN 8
-#define RUMBLE_PIN 10
-#define RUMBLE_FORCE  250 //0-255 were using a PWM signal to control rumble to save battery
-#define N64_HIGH DDRB &= ~0x01
-#define N64_LOW DDRB |= 0x01
-#define N64_QUERY (PINB & 0x01)
-
 #if defined(ARDUINO_AVR_MINI)       
   #define BOARD "Mini"
 #elif defined(ARDUINO_AVR_NANO)       
@@ -84,6 +75,15 @@
 #else
    #error "Unsupported board"
 #endif
+
+#define F_CPU 16000000
+
+#define N64_PIN 8
+#define RUMBLE_PIN 10
+#define RUMBLE_FORCE  250 //0-255 were using a PWM signal to control rumble to save battery
+#define N64_HIGH DDRB &= ~0x01
+#define N64_LOW DDRB |= 0x01
+#define N64_QUERY (PINB & 0x01)
 
 #include <Wire.h>
 #include "pins_arduino.h"
@@ -111,17 +111,22 @@
 #endif
 
 #ifdef USE_ENCODER
-  #if defined(USE_EEPROM)
-    #error("Can NOT enable USE_ENCODER and USE_EEPROM simultaneously! The encoder makes use of the two I2C pins that are required by the EEPROM.")
-  #endif
   
-  #if defined(ARDUINO_AVR_NANO)
-    #define encoderIx A1
-    #define encoderQx A2
-    #define encoderIy A4 // I2C_SCL
-    #define encoderQy A5 // I2C_SDA
-    #define encoderX  A6
-    #define encoderY  A7
+  #if defined(ARDUINO_AVR_MINI) || defined(ARDUINO_AVR_PRO)
+    #error("This is board does not support n64 encoder, not enough pins!")
+  #elif defined(ARDUINO_AVR_NANO)
+    #define encoderIx A1 // 1
+    #define encoderQx A2 // 4
+    #define encoderIy A6 // 5
+    #define encoderQy A7 // 6 (white)
+  #elif defined(ARDUINO_AVR_UNO)
+    #if defined(USE_EEPROM)
+      #error("Can NOT enable USE_ENCODER and USE_EEPROM simultaneously! The encoder makes use of the two I2C pins that are required by the EEPROM.")
+    #endif
+    #define encoderIx A1 // 1
+    #define encoderQx A2 // 4
+    #define encoderIy A4 // 5
+    #define encoderQy A5 // 6 (white)
   #else
     #error("This is board does not support the encoder! Not enough pins, must use Arduino Nano.")
   #endif
@@ -238,8 +243,8 @@ void setup()
     pinMode(encoderQx, INPUT);
     pinMode(encoderIy, INPUT);
     pinMode(encoderQy, INPUT);
-    attachInterrupt(encoderX, handleEncoderX, CHANGE);
-    attachInterrupt(encoderY, handleEncoderY, CHANGE); 
+    attachInterrupt(digitalPinToInterrupt(encoderIx), handleEncoderX, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(encoderIy), handleEncoderY, CHANGE);
   #else
     pinMode(JOY_X, INPUT);
     pinMode(JOY_Y, INPUT);
