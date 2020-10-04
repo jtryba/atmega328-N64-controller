@@ -261,8 +261,8 @@ void setup()
   digitalWrite(RUMBLE_PIN, LOW);
   pinMode(RUMBLE_PIN, OUTPUT);
 
-  #ifdef USE_ENCODER
-  CalStick();
+  #ifndef USE_ENCODER
+    CalStick();
   #endif
 
   #ifdef USE_EEPROM
