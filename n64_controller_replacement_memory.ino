@@ -62,7 +62,7 @@
  */
 
 //#define USE_ENCODER 1 // uncomment this line to use the orig n64 encoder, only nano supports this
-#define USE_EEPROM 1 // uncomment this line to use the 24LC256 to emulate a cpack
+//#define USE_EEPROM 1 // uncomment this line to use the 24LC256 to emulate a cpack
 
 #if defined(ARDUINO_AVR_MINI)       
   #define BOARD "Mini"
