@@ -35,26 +35,16 @@
  * Just use the 5v rail to power this in a portable.
  */
 
-#include <Wire.h>
+//#define DEBUG
+//#define DEBUG_VERBOSE
+
+#ifdef DEBUG_VERBOSE
+  #ifndef DEBUG
+    #define DEBUG
+  #endif
+#endif
+
 #include "pins_arduino.h"
-
-/*This address is determined by the way your address pins are wired.
-In the diagram from earlier, we connected A0 and A1 to Ground and 
-A2 to 5V. To get the address, we start with the control code from 
-the datasheet (1010) and add the logic state for each address pin
-in the order A2, A1, A0 (100) which gives us 0b1010100, or in 
-Hexadecimal, 0x54*/
-
-#define EEPROM_ADR 0x54
-
-/*Theoretically, the 24LC256 has a 64-byte page write buffer but 
-we'll write 32 at a time*/
-
-#define MAX_I2C_WRITE 32
-#define I2C_CLOCK 400000
-
-byte tempStore[MAX_I2C_WRITE];
-
 
 #define N64_PIN 8
 #define RUMBLE_PIN 10
@@ -69,22 +59,23 @@ byte tempStore[MAX_I2C_WRITE];
 #define JOY_DEAD      2
 #define JOY_RANGE     400 // 1023 * 0.4 rounded a bit
 
-#define JOY_X         A1
-#define JOY_Y         A2
-#define BTN_A         0
-#define BTN_B         1
-#define BTN_C_UP      2
-#define BTN_C_DOWN    3
-#define BTN_C_LEFT    4
-#define BTN_C_RIGHT   5
-#define BTN_L         9
-#define BTN_R         A0
-#define BTN_Z         11
-#define PAD_UP        6
-#define PAD_DOWN      7
-#define PAD_LEFT      12
-#define PAD_RIGHT     A3
-#define BTN_START     13
+//        Board: Mini/Uno // Nano
+#define JOY_X         A1  // A1
+#define JOY_Y         A2  // A2
+#define BTN_A         0   // RX0
+#define BTN_B         1   // TX1
+#define BTN_C_UP      2   // D2
+#define BTN_C_DOWN    3   // D3
+#define BTN_C_LEFT    4   // D4
+#define BTN_C_RIGHT   5   // D5
+#define BTN_L         9   // D9
+#define BTN_R         A0  // A0
+#define BTN_Z         11  // D11
+#define PAD_UP        6   // D6
+#define PAD_DOWN      7   // D7
+#define PAD_LEFT      12  // D12
+#define PAD_RIGHT     A3  // A3
+#define BTN_START     13  // D13
 
 // Control sticks:
 // 64 expects a signed value from -128 to 128 with 0 being neutral
@@ -145,26 +136,29 @@ void setup()
   digitalWrite(N64_PIN, LOW);
   pinMode(N64_PIN, INPUT);
 
-  digitalWrite(13, LOW);
-  pinMode(13, OUTPUT);
-
-  /*
-  Serial.begin(9600);
-  Serial.println();
+#ifdef DEBUG
+  Serial.begin(115200);
+  Serial.println("------------------");
   Serial.println("Setup has started!");
-  */
+#endif
   
   // setup I/O
-  // stick
-  pinMode(JOY_X, INPUT);
-  pinMode(JOY_Y, INPUT);
-  
   // buttons
   for (int i = 0; i < BUTTON_COUNT; i ++)
   {
+#ifdef DEBUG
+    if (btn[i] == 0 || btn[i] == 1)
+    {
+      continue;
+    }
+#endif
     digitalWrite(btn[i], LOW);
     pinMode(btn[i], INPUT_PULLUP);
   }
+  
+  // stick
+  pinMode(JOY_X, INPUT);
+  pinMode(JOY_Y, INPUT);
   
   // rumble
   digitalWrite(RUMBLE_PIN, LOW);
@@ -172,11 +166,9 @@ void setup()
 
   CalStick();
 
-  //Start the I2C Library
-  Wire.begin();
-  Wire.setClock(I2C_CLOCK);
-  
-  //Serial.println("Code has started!");
+#ifdef DEBUG
+  Serial.println("Code has started!");
+#endif
 }
 
 void ReadInputs(void)
@@ -198,8 +190,8 @@ void ReadInputs(void)
     
     // Second byte to N64 should contain:
     // 0, 0, L, R, Cup, Cdown, Cleft, Cright
-    //bitWrite(n64_buffer[1], 7, 0);
-    //bitWrite(n64_buffer[1], 6, 0);
+    bitWrite(n64_buffer[1], 7, 0);
+    bitWrite(n64_buffer[1], 6, 0);
     bitWrite(n64_buffer[1], 5, !digitalRead(btn[8]));
     bitWrite(n64_buffer[1], 4, !digitalRead(btn[9]));
     bitWrite(n64_buffer[1], 3, !digitalRead(btn[10]));
@@ -214,7 +206,7 @@ void ReadInputs(void)
     
     n64_buffer[2] = 0;
 
-    /*
+#ifdef DEBUG_DATA
     char buf[32];
     memset(buf, 0, 32);
     sprintf(buf, "0x%d%d%d%d%d%d%d%d%d%d%d%d%d%d",
@@ -240,13 +232,15 @@ void ReadInputs(void)
     Serial.print(n64_buffer[3], HEX);
     Serial.print(" ");
     Serial.println(rumble, HEX);
-    */
+#endif
 }
 
 void CalStick(void)
 {
-  //Serial.println("Calibrating analog stick...");
-  
+#ifdef DEBUG
+  Serial.println("Calibrating analog stick...");
+#endif
+
   int t = 5;
   int x = 0;
   int y = 0;
@@ -267,13 +261,13 @@ void CalStick(void)
   zero_x = GetStick_x();
   zero_y = GetStick_y();
 
-  /*
+#ifdef DEBUG
   Serial.print("Center x: ");
   Serial.println(center_x);
   Serial.print("Center y: ");
   Serial.println(center_y);
   Serial.println("Calibration complete!");
-  */
+#endif
 }
 
 signed int GetStick_x(void)
@@ -323,11 +317,12 @@ void loop()
     // and here:
     // http://n64devkit.square7.ch/pro-man/pro26/26-03.htm
     //
-    
     switch (n64_command)
     {
+      // identify command
+        case 0xFD: // required to make sm64 recognise micro
         case 0xFF:
-            CalStick();
+            //CalStick();
             rumble = false;
         case 0x00:
             // identify
@@ -344,15 +339,13 @@ void loop()
             n64_buffer[2] = 0x01;
 
             n64_send(n64_buffer, 3, 0);
-
-            //Serial.println("It was 0x00: an identify command");
             break;
+      // query command
         case 0x01:
             // blast out the pre-assembled array in n64_buffer
             n64_send(n64_buffer, 4, 0);
-
-            //Serial.println("It was 0x01: the query command");
             break;
+      // read command
         case 0x02:
             // A read. If the address is 0x8000, return 32 bytes of 0x80 bytes,
             // and a CRC byte.  this tells the system our attached controller
@@ -363,9 +356,8 @@ void loop()
             memset(n64_buffer, 0x80, 32);
             n64_buffer[32] = 0xB8; // CRC
             n64_send(n64_buffer, 33, 1);
-
-            //Serial.println("It was 0x02: the read command");
             break;
+      // write command
         case 0x03:
             // A write. we at least need to respond with a single CRC byte.  If
             // the write was to address 0xC000 and the data was 0x01, turn on
@@ -415,63 +407,30 @@ void loop()
                 //03 C0 1B 00 00 00 ...
                 rumble = (data != 0);
             }
-            else
-            {
-              long currentSpot = 0;
-              long timerReset = 0;
-              byte counter = 0;
-
-              long len = sizeof(n64_raw_dump);
-              memset(write_buffer, 0x00, MAX_I2C_WRITE);
-              
-              for (int i = 0; i < len; i++)
-              {
-                if (i < 2)
-                  continue;
-                tempStore[counter++] = n64_raw_dump[i];
-
-                if (counter == MAX_I2C_WRITE)
-                {
-                //Once we've collected a page worth, go ahead and do 
-                //a page write operation
-                  writeEEPROMPage(addr+currentSpot);
-                  counter = 0; //Reset
-                  currentSpot += MAX_I2C_WRITE;
-                }
-              }
-            }
-            /*
-            Serial.println("It was 0x03: the write command");
+            
+#ifdef DEBUG_VERBOSE
             Serial.print("Addr was 0x");
             Serial.print(addr, HEX);
             Serial.print(" and data was 0x");
             Serial.println(data, HEX);
-            */
+#endif
             break;
 
         default:
+#ifdef DEBUG
             Serial.print(millis(), DEC);
             Serial.println(" | Unknown command received!!");
+#endif
             break;
 
     }
 
     interrupts();  
-}
-
-void writeEEPROMPage(long eeAddress)
-{
-
-  Wire.beginTransmission(EEPROM_ADR);
-
-  Wire.write((int)(eeAddress >> 8)); // MSB
-  Wire.write((int)(eeAddress & 0xFF)); // LSB
-
-  //Write bytes to EEPROM
-  for (byte x = 0 ; x < MAX_I2C_WRITE ; x++)
-    Wire.write(tempStore[x]); //Write the data
-
-  Wire.endTransmission(); //Send stop condition
+#ifdef DEBUG_VERBOSE
+    Serial.print("It was a 0x");
+    Serial.print(n64_command, HEX);
+    Serial.println(" command");
+#endif
 }
 
 /**
