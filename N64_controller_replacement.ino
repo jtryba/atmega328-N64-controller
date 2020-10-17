@@ -297,7 +297,7 @@ void loop()
 
     // control rumble motor
     analogWrite(RUMBLE_PIN, (rumble?RUMBLE_FORCE:0));
-    digitalWrite(13, rumble);
+    digitalWrite(RUMBLE_PIN, rumble);
 
     ReadInputs();
 
