@@ -127,6 +127,9 @@ signed int GetStick_x(void);
 signed int GetStick_y(void);
 
 static bool rumble = false;
+static bool rumblelast = false;
+static unsigned char enableRumble = 0x01;
+static long lastSwitch = millis();
 
 #include "crc_table.h"
 
@@ -199,6 +202,48 @@ void ReadInputs(void)
     bitWrite(n64_buffer[1], 1, !digitalRead(btn[12]));
     bitWrite(n64_buffer[1], 0, !digitalRead(btn[13]));
 
+    // user reset the controller
+    byte l = bitRead(n64_buffer[1], 5);
+    byte r = bitRead(n64_buffer[1], 4);
+    byte start = bitRead(n64_buffer[0], 4);
+    byte z = bitRead(n64_buffer[0], 5);
+    if (l != 0 && r != 0)
+    {
+      if (start != 0)
+      {
+        //Serial.println("User reset the controller");
+        analogWrite(RUMBLE_PIN, RUMBLE_FORCE);
+        delay(50);
+        analogWrite(RUMBLE_PIN, 0);
+        rumble = false;
+        bitWrite(n64_buffer[0], 4, 0); // ignore start press
+        CalStick();
+      }
+      if (z != 0)
+      {
+        bitWrite(n64_buffer[0], 5, 0); // ignore z press
+        long elapsed = millis() - lastSwitch;
+        if (elapsed > 100)
+        {
+          //Serial.println("User toggled rumble");
+          analogWrite(RUMBLE_PIN, RUMBLE_FORCE);
+          delay(50);
+          analogWrite(RUMBLE_PIN, 0);
+          rumble = false;
+          enableRumble++;
+          if (enableRumble > 0x01)
+          {
+            enableRumble = 0x00;
+            analogWrite(RUMBLE_PIN, RUMBLE_FORCE);
+            delay(50);
+            analogWrite(RUMBLE_PIN, 0);
+          }
+          lastSwitch = millis();
+          identify();
+        }
+      }
+    }
+
     // Third byte: Control Stick X position
     n64_buffer[2] = -zero_x + GetStick_x();
     // Fourth byte: Control Stick Y Position
@@ -206,7 +251,7 @@ void ReadInputs(void)
     
     n64_buffer[2] = 0;
 
-#ifdef DEBUG_DATA
+#ifdef DEBUG_PAD_DATA
     char buf[32];
     memset(buf, 0, 32);
     sprintf(buf, "0x%d%d%d%d%d%d%d%d%d%d%d%d%d%d",
@@ -290,13 +335,35 @@ signed int GetStick_y(void)
   return i;
 }
 
+void identify()
+{
+  rumble = false;
+            
+  // mutilate the n64_buffer array with our status
+  // we return 0x050001 to indicate we have a rumble pack
+  // or 0x050002 to indicate the expansion slot is empty
+  //
+  // 0xFF I've seen sent from Mario 64 and Shadows of the Empire.
+  // I don't know why it's different, but the controllers seem to
+  // send a set of status bytes afterwards the same as 0x00, and
+  // it won't work without it.
+  
+  n64_buffer[0] = 0x05;
+  n64_buffer[1] = 0x00;
+  n64_buffer[2] = enableRumble; // = 0x01
+
+  uint8_t oldSREG = SREG;
+  // Clear interrupts
+  cli();
+  n64_send(n64_buffer, 3, 0);
+  // Restore old interrupt state
+  SREG = oldSREG;
+}
+
 void loop()
 {
     int status;
     unsigned char data, addr;
-
-    // control rumble motor
-    analogWrite(RUMBLE_PIN, (rumble?RUMBLE_FORCE:0));
 
     ReadInputs();
 
@@ -318,26 +385,14 @@ void loop()
     //
     switch (n64_command)
     {
-      // identify command
+      // identify command(s)
+        case 0x7F: // required to make pokemon puzzle league recognise micro
         case 0xFD: // required to make sm64 recognise micro
+        case 0xFE:
         case 0xFF:
             //CalStick();
-            rumble = false;
         case 0x00:
-            // identify
-            // mutilate the n64_buffer array with our status
-            // we return 0x050001 to indicate we have a rumble pack
-            // or 0x050002 to indicate the expansion slot is empty
-            //
-            // 0xFF I've seen sent from Mario 64 and Shadows of the Empire.
-            // I don't know why it's different, but the controllers seem to
-            // send a set of status bytes afterwards the same as 0x00, and
-            // it won't work without it.
-            n64_buffer[0] = 0x05;
-            n64_buffer[1] = 0x00;
-            n64_buffer[2] = 0x01;
-
-            n64_send(n64_buffer, 3, 0);
+            identify();
             break;
       // query command
         case 0x01:
@@ -424,7 +479,15 @@ void loop()
 
     }
 
-    interrupts();  
+    interrupts();
+
+    if (rumble != rumblelast)
+    {
+      rumblelast = rumble;
+      // control rumble motor
+      analogWrite(RUMBLE_PIN, (rumble?RUMBLE_FORCE:0));
+    }
+    
 #ifdef DEBUG_VERBOSE
     Serial.print("It was a 0x");
     Serial.print(n64_command, HEX);
