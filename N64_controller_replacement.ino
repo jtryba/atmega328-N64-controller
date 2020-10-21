@@ -192,7 +192,7 @@ void ReadInputs(void)
     bitWrite(n64_buffer[0], 0, !digitalRead(btn[7]));
     
     // Second byte to N64 should contain:
-    // 0, 0, L, R, Cup, Cdown, Cleft, Cright
+    // Reset, 0, L, R, Cup, Cdown, Cleft, Cright
     bitWrite(n64_buffer[1], 7, 0);
     bitWrite(n64_buffer[1], 6, 0);
     bitWrite(n64_buffer[1], 5, !digitalRead(btn[8]));
@@ -216,6 +216,7 @@ void ReadInputs(void)
         delay(50);
         analogWrite(RUMBLE_PIN, 0);
         rumble = false;
+        bitWrite(n64_buffer[1], 7, 1); // set controller reset flag
         bitWrite(n64_buffer[0], 4, 0); // ignore start press
         CalStick();
       }
@@ -401,13 +402,15 @@ void loop()
             break;
       // read command
         case 0x02:
+            // Addresses 8000-8FFF is used to query the enable state. 1 = enabled, 0 = disabled.
+            
             // A read. If the address is 0x8000, return 32 bytes of 0x80 bytes,
             // and a CRC byte.  this tells the system our attached controller
             // pack is a rumble pack
 
             // Assume it's a read for 0x8000, which is the only thing it should
             // be requesting anyways
-            memset(n64_buffer, 0x80, 32);
+            memset(n64_buffer, (enableRumble == 0x01) ? 0x80 : 0x00, 32);
             n64_buffer[32] = 0xB8; // CRC
             n64_send(n64_buffer, 33, 1);
             break;
@@ -430,15 +433,6 @@ void loop()
             data |= (n64_raw_dump[22] != 0) << 1;
             data |= (n64_raw_dump[23] != 0);
 
-            // get crc byte, invert it, as per the protocol for
-            // having a memory card attached
-            n64_buffer[0] = crc_repeating_table[data] ^ 0xFF;
-
-            // send it
-            n64_send(n64_buffer, 1, 1);
-
-            // end of time critical code
-            // was the address the rumble latch at 0xC000?
             // decode the first half of the address, bits
             // 8 through 15
             addr = 0;
@@ -451,7 +445,34 @@ void loop()
             addr |= (n64_raw_dump[6] != 0) << 1;
             addr |= (n64_raw_dump[7] != 0);
 
-            if (addr == 0xC0) {
+            if (addr == 0x80)
+            {
+              /*
+              N64 sends: 03 80 01 followed by 32 bytes, all FE
+              Response: 0xE1 with memory pak, 0x1E without.
+              The response has no stop bit! instead, the data line
+              goes low for 2us immediately after the last data bit. <- isnt that a long stop bit?
+              N64 sends: 02 80 01
+              Response: 32 0x80s with rumble pack, 32 0x00s without.
+              Followed by CRC and a stop bit.
+              */
+              n64_buffer[1] = (enableRumble == 0x01) ? 0xE1 : 0x1E;
+              n64_buffer[0] = crc_repeating_table[data] ^ 0xFF;
+              n64_send(n64_buffer, 2, 1);
+            }
+            else
+            {
+              // get crc byte, invert it, as per the protocol for
+              // having a memory card attached
+              n64_buffer[0] = crc_repeating_table[data] ^ 0xFF;
+              // send it
+              n64_send(n64_buffer, 1, 1);
+            }
+            // end of time critical code
+
+            // was the address the rumble latch at 0xC000?
+            if (addr == 0xC0)
+            {
                 //Rumble pak writes:
                 //To switch on the rumble pak motor, the N64 sends:
                 //03 C0 1B 01 01 01 ...
