@@ -71,8 +71,38 @@
 #define RUMBLE_FORCE  250 //0-255
 
 #define BUTTON_COUNT  14
-#define JOY_DEAD      2
-#define JOY_RANGE     400 // 1023 * 0.4 rounded a bit
+#define BTN_A         0   // RX0
+#define BTN_B         1   // TX1
+#define BTN_C_UP      2   // D2
+#define BTN_C_DOWN    3   // D3
+#define BTN_C_LEFT    4   // D4
+#define BTN_C_RIGHT   5   // D5
+#define BTN_L         9   // D9
+#define BTN_R         A0  // A0
+#define BTN_Z         11  // D11
+#define PAD_UP        6   // D6
+#define PAD_DOWN      7   // D7
+#define PAD_LEFT      12  // D12
+#define PAD_RIGHT     A3  // A3
+#define BTN_START     13  // D13
+
+// Control sticks:
+// 64 expects a signed value from -128 to 128 with 0 being neutral
+//
+// Additionally, the 64 controllers are relative. Whatever stick position
+// it's in when it's powered on is what it reports as 0.
+//
+// While the joystick data is a signed 8 bit 2s complement we know from Micro
+// that controllers only have 160 steps on them and I've had games which screw
+// up when given the full 8 bit range.
+//
+// 160 steps diveded by 2 is 80 steps in each direction, adding a buffer i used 90
+// also by using the controller_test.rom on official hardware, ive found that most controllers report closer to 90-100 anyway
+//
+// More technical info on joysticks can be found here:
+// http://n64devkit.square7.ch/pro-man/pro26/26-02.htm#01
+//
+#define JOY_MAX_REPORT 100 // 127 for full 8 bit data
 
 //        Board: Mini/Uno // Nano
 #ifdef USE_ENCODER
@@ -95,54 +125,16 @@
   
   volatile signed int countx;
   volatile signed int county;
-  
+  void handleEncoderX(void);
+  void handleEncoderX(void);
 #else
-
   #define JOY_DEAD      2
   #define JOY_RANGE     400 // 1023 * 0.4 rounded a bit
   #define JOY_X         A1
   #define JOY_Y         A2
   //#define I2C_SCL     A4
   //#define I2C_SDA     A5
-  
 #endif
-#define BTN_A         0   // RX0
-#define BTN_B         1   // TX1
-#define BTN_C_UP      2   // D2
-#define BTN_C_DOWN    3   // D3
-#define BTN_C_LEFT    4   // D4
-#define BTN_C_RIGHT   5   // D5
-#define BTN_L         9   // D9
-#define BTN_R         A0  // A0
-#define BTN_Z         11  // D11
-#define PAD_UP        6   // D6
-#define PAD_DOWN      7   // D7
-#define PAD_LEFT      12  // D12
-#define PAD_RIGHT     A3  // A3
-#define BTN_START     13  // D13
-
-#ifdef USE_ENCODER
-  void handleEncoderX(void);
-  void handleEncoderX(void);
-#endif
-
-// Control sticks:
-// 64 expects a signed value from -128 to 128 with 0 being neutral
-//
-// Additionally, the 64 controllers are relative. Whatever stick position
-// it's in when it's powered on is what it reports as 0.
-//
-// While the joystick data is a signed 8 bit 2s complement we know from Micro
-// that controllers only have 160 steps on them and I've had games which screw
-// up when given the full 8 bit range.
-//
-// 160 steps diveded by 2 is 80 steps in each direction, adding a buffer i used 90
-// also by using the controller_test.rom on official hardware, ive found that most controllers report closer to 90-100 anyway
-//
-// More technical info on joysticks can be found here:
-// http://n64devkit.square7.ch/pro-man/pro26/26-02.htm#01
-//
-#define JOY_MAX_REPORT 100 // 127 for full 8 bit data
 
 int JOY_X_MIN = 0;    // will be calculated later in CalStick()
 int JOY_X_MAX = 1023; // will be calculated later in CalStick()
@@ -312,8 +304,6 @@ void ReadInputs(void)
     n64_buffer[2] = -zero_x + GetStick_x();
     // Fourth byte: Control Stick Y Position
     n64_buffer[3] = -zero_y + GetStick_y();
-    
-    n64_buffer[2] = 0;
 
 #ifdef DEBUG_PAD_DATA
     char buf[32];
