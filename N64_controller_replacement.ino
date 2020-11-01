@@ -35,8 +35,23 @@
  * Just use the 5v rail to power this in a portable.
  */
 
+ #if defined(ARDUINO_AVR_MINI)       
+  #define BOARD "Mini"
+#elif defined(ARDUINO_AVR_NANO)       
+  #define BOARD "Nano"
+#elif defined(ARDUINO_AVR_PRO)       
+  #define BOARD "Pro"
+#elif defined(ARDUINO_AVR_UNO)       
+    #define BOARD "Uno"
+#elif defined(ARDUINO_AVR_MICRO)       
+    #define BOARD "Micro"
+#else
+   #error "Unsupported board"
+#endif
+
 //#define DEBUG
 //#define DEBUG_VERBOSE
+//#define USE_ENCODER 1 // uncomment this line to use the orig n64 encoder, only nano supports this
 
 #ifdef DEBUG_VERBOSE
   #ifndef DEBUG
@@ -60,8 +75,37 @@
 #define JOY_RANGE     400 // 1023 * 0.4 rounded a bit
 
 //        Board: Mini/Uno // Nano
-#define JOY_X         A1  // A1
-#define JOY_Y         A2  // A2
+#ifdef USE_ENCODER
+  
+  #if defined(ARDUINO_AVR_MINI) || defined(ARDUINO_AVR_PRO) || defined(ARDUINO_AVR_MICRO)
+    #error("This is board does not support n64 encoder, not enough pins!")
+  #elif defined(ARDUINO_AVR_NANO)
+    #define encoderIx A1 // 1
+    #define encoderQx A2 // 4
+    #define encoderIy A6 // 5
+    #define encoderQy A7 // 6 (white)
+  #elif defined(ARDUINO_AVR_UNO)
+    #define encoderIx A1 // 1
+    #define encoderQx A2 // 4
+    #define encoderIy A4 // 5
+    #define encoderQy A5 // 6 (white)
+  #else
+    #error("This is board does not support the encoder! Not enough pins, must use Arduino Nano.")
+  #endif
+  
+  volatile signed int countx;
+  volatile signed int county;
+  
+#else
+
+  #define JOY_DEAD      2
+  #define JOY_RANGE     400 // 1023 * 0.4 rounded a bit
+  #define JOY_X         A1
+  #define JOY_Y         A2
+  //#define I2C_SCL     A4
+  //#define I2C_SDA     A5
+  
+#endif
 #define BTN_A         0   // RX0
 #define BTN_B         1   // TX1
 #define BTN_C_UP      2   // D2
@@ -76,6 +120,11 @@
 #define PAD_LEFT      12  // D12
 #define PAD_RIGHT     A3  // A3
 #define BTN_START     13  // D13
+
+#ifdef USE_ENCODER
+  void handleEncoderX(void);
+  void handleEncoderX(void);
+#endif
 
 // Control sticks:
 // 64 expects a signed value from -128 to 128 with 0 being neutral
@@ -121,6 +170,7 @@ static unsigned char n64_buffer[33];
 
 static void get_n64_command(void);
 static void n64_send(unsigned char *buffer, char length, bool wide_stop);
+static void n64_send_raw(unsigned char *buffer, char length);
 void ReadInputs(void);
 void CalStick(void);
 signed int GetStick_x(void);
@@ -160,14 +210,27 @@ void setup()
   }
   
   // stick
-  pinMode(JOY_X, INPUT);
-  pinMode(JOY_Y, INPUT);
+  #ifdef USE_ENCODER
+    countx=0;
+    county=0;
+    pinMode(encoderIx, INPUT);
+    pinMode(encoderQx, INPUT);
+    pinMode(encoderIy, INPUT);
+    pinMode(encoderQy, INPUT);
+    attachInterrupt(digitalPinToInterrupt(encoderIx), handleEncoderX, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(encoderIy), handleEncoderY, CHANGE);
+  #else
+    pinMode(JOY_X, INPUT);
+    pinMode(JOY_Y, INPUT);
+  #endif
   
   // rumble
   digitalWrite(RUMBLE_PIN, LOW);
   pinMode(RUMBLE_PIN, OUTPUT);
 
-  CalStick();
+  #ifndef USE_ENCODER
+    CalStick();
+  #endif
 
 #ifdef DEBUG
   Serial.println("Code has started!");
@@ -286,7 +349,10 @@ void CalStick(void)
 #ifdef DEBUG
   Serial.println("Calibrating analog stick...");
 #endif
-
+#ifdef USE_ENCODER
+    zero_x = 0;
+    zero_y = 0;
+#else
   int t = 5;
   int x = 0;
   int y = 0;
@@ -306,7 +372,7 @@ void CalStick(void)
 
   zero_x = GetStick_x();
   zero_y = GetStick_y();
-
+#endif
 #ifdef DEBUG
   Serial.print("Center x: ");
   Serial.println(center_x);
@@ -316,24 +382,62 @@ void CalStick(void)
 #endif
 }
 
+#ifdef USE_ENCODER
+
+void handleEncoderX()
+{
+  if(digitalRead(encoderIx) == digitalRead(encoderQx))
+  {
+    countx++;
+  }
+  else
+  {
+    countx--;
+  }
+  countx = constrain(countx, -JOY_MAX_REPORT, JOY_MAX_REPORT);
+}
+
+void handleEncoderY()
+{
+  if(digitalRead(encoderIy) == digitalRead(encoderQy))
+  {
+    county++;
+  }
+  else
+  {
+    county--;
+  }
+  county = constrain(county, -JOY_MAX_REPORT, JOY_MAX_REPORT);
+}
+
+#endif
+
 signed int GetStick_x(void)
-{    
-  unsigned int l = analogRead(JOY_X);
-  l = constrain(l, JOY_X_MIN, JOY_X_MAX);
-  signed int i = map(l, JOY_X_MIN, JOY_X_MAX, -JOY_MAX_REPORT, JOY_MAX_REPORT);
-  if (i < JOY_DEAD && i > -JOY_DEAD)
-    return 0;
-  return i;
+{
+  #ifdef USE_ENCODER
+    return countx;
+  #else
+    unsigned int l = analogRead(JOY_X);
+    l = constrain(l, JOY_X_MIN, JOY_X_MAX);
+    signed int i = map(l, JOY_X_MIN, JOY_X_MAX, -JOY_MAX_REPORT, JOY_MAX_REPORT);
+    if (i < JOY_DEAD && i > -JOY_DEAD)
+      return 0;
+    return i;
+  #endif
 }
 
 signed int GetStick_y(void)
 {
-  unsigned int l = analogRead(JOY_Y);
-  l = constrain(l, JOY_Y_MIN, JOY_Y_MAX);
-  signed int i = map(l, JOY_Y_MIN, JOY_Y_MAX, -JOY_MAX_REPORT, JOY_MAX_REPORT);
-  if (i < JOY_DEAD && i > -JOY_DEAD)
-    return 0;
-  return i;
+  #ifdef USE_ENCODER
+    return county;
+  #else
+    unsigned int l = analogRead(JOY_Y);
+    l = constrain(l, JOY_Y_MIN, JOY_Y_MAX);
+    signed int i = map(l, JOY_Y_MIN, JOY_Y_MAX, -JOY_MAX_REPORT, JOY_MAX_REPORT);
+    if (i < JOY_DEAD && i > -JOY_DEAD)
+      return 0;
+    return i;
+  #endif
 }
 
 void identify()
@@ -352,6 +456,8 @@ void identify()
   n64_buffer[0] = 0x05;
   n64_buffer[1] = 0x00;
   n64_buffer[2] = enableRumble; // = 0x01
+
+  // 000001010000000000000001b
 
   uint8_t oldSREG = SREG;
   // Clear interrupts
@@ -411,7 +517,7 @@ void loop()
             // Assume it's a read for 0x8000, which is the only thing it should
             // be requesting anyways
             memset(n64_buffer, (enableRumble == 0x01) ? 0x80 : 0x00, 32);
-            n64_buffer[32] = 0xB8; // CRC
+            n64_buffer[32] = 0xB8; // CRC 10111000b
             n64_send(n64_buffer, 33, 1);
             break;
       // write command
@@ -454,11 +560,11 @@ void loop()
               goes low for 2us immediately after the last data bit. <- isnt that a long stop bit?
               N64 sends: 02 80 01
               Response: 32 0x80s with rumble pack, 32 0x00s without.
-              Followed by CRC and a stop bit.
+              Followed by CRC and no stop bit.
               */
               n64_buffer[1] = (enableRumble == 0x01) ? 0xE1 : 0x1E;
               n64_buffer[0] = crc_repeating_table[data] ^ 0xFF;
-              n64_send(n64_buffer, 2, 1);
+              n64_send_raw(n64_buffer, 2);
             }
             else
             {
@@ -492,6 +598,7 @@ void loop()
             break;
 
         default:
+        identify();
 #ifdef DEBUG
             Serial.print(millis(), DEC);
             Serial.println(" | Unknown command received!!");
@@ -595,6 +702,9 @@ read_more:
             case (0x00):
             case (0x01):
             case (0xFF):
+            case (0x7F):
+            case (0xFD):
+            case (0xFE):
             default:
                 // get the last (stop) bit
                 bitcount = 1;
@@ -752,4 +862,110 @@ inner_loop:
 
     N64_HIGH;
 
+}
+
+/**
+ * This sends the given byte sequence to the n64 without a stop bit
+ * length must be at least 1
+ * hardcoded for Arduino DIO 8
+ */
+static void n64_send_raw(unsigned char *buffer, char length)
+{
+    asm volatile (";Starting N64 Send Routine");
+    // Send these bytes
+    char bits;
+    
+    // This routine is very carefully timed by examining the assembly output.
+    // Do not change any statements, it could throw the timings off
+    //
+    // We get 16 cycles per microsecond, which should be plenty, but we need to
+    // be conservative. Most assembly ops take 1 cycle, but a few take 2
+    //
+    // I use manually constructed for-loops out of gotos so I have more control
+    // over the outputted assembly. I can insert nops where it was impossible
+    // with a for loop
+    
+    asm volatile (";Starting outer for loop");
+outer_loop:
+    {
+        asm volatile (";Starting inner for loop");
+        bits=8;
+inner_loop:
+        {
+            // Starting a bit, set the line low
+            asm volatile (";Setting line to low");
+            N64_LOW; // 1 op, 2 cycles
+
+            asm volatile (";branching");
+            if (*buffer >> 7) {
+                asm volatile (";Bit is a 1");
+                // 1 bit
+                // remain low for 1us, then go high for 3us
+                // nop block 1
+                asm volatile ("nop\nnop\nnop\nnop\nnop\n");
+                
+                asm volatile (";Setting line to high");
+                N64_HIGH;
+
+                // nop block 2
+                // we'll wait only 2us to sync up with both conditions
+                // at the bottom of the if statement
+                asm volatile ("nop\nnop\nnop\nnop\nnop\n"  
+                              "nop\nnop\nnop\nnop\nnop\n"  
+                              "nop\nnop\nnop\nnop\nnop\n"  
+                              "nop\nnop\nnop\nnop\nnop\n"  
+                              "nop\nnop\nnop\nnop\nnop\n"  
+                              "nop\nnop\nnop\nnop\nnop\n"  
+                              );
+
+            } else {
+                asm volatile (";Bit is a 0");
+                // 0 bit
+                // remain low for 3us, then go high for 1us
+                // nop block 3
+                asm volatile ("nop\nnop\nnop\nnop\nnop\n"  
+                              "nop\nnop\nnop\nnop\nnop\n"  
+                              "nop\nnop\nnop\nnop\nnop\n"  
+                              "nop\nnop\nnop\nnop\nnop\n"  
+                              "nop\nnop\nnop\nnop\nnop\n"  
+                              "nop\nnop\nnop\nnop\nnop\n"  
+                              "nop\nnop\nnop\nnop\nnop\n"  
+                              "nop\n");
+
+                asm volatile (";Setting line to high");
+                N64_HIGH;
+
+                // wait for 1us
+                asm volatile ("; end of conditional branch, need to wait 1us more before next bit");
+                
+            }
+            // end of the if, the line is high and needs to remain
+            // high for exactly 16 more cycles, regardless of the previous
+            // branch path
+
+            asm volatile (";finishing inner loop body");
+            --bits;
+            if (bits != 0) {
+                // nop block 4
+                // this block is why a for loop was impossible
+                asm volatile ("nop\nnop\nnop\nnop\nnop\n"  
+                              "nop\nnop\nnop\nnop\n");
+                // rotate bits
+                asm volatile (";rotating out bits");
+                *buffer <<= 1;
+
+                goto inner_loop;
+            } // fall out of inner loop
+        }
+        asm volatile (";continuing outer loop");
+        // In this case: the inner loop exits and the outer loop iterates,
+        // there are /exactly/ 16 cycles taken up by the necessary operations.
+        // So no nops are needed here (that was lucky!)
+        --length;
+        if (length != 0) {
+            ++buffer;
+            goto outer_loop;
+        } // fall out of outer loop
+    }
+    N64_HIGH;
 }
