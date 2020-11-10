@@ -3,8 +3,11 @@ A stand alone replacement to the Nintendo CNT-NUS N64 controller chip, with buil
 Tested on 328, 328P, and 168 (all @ 16 Mhz)
 
 *If memory pack support isnt required just use "N64_controller_replacement.ino"
+
 *Memory pack emulation is WIP and currently does not work.
+
 *Rumble is not working with goldeneye
+
 
 Based off: Gamecube controller to Nintendo 64 adapter
 by Andrew Brown
