@@ -19,7 +19,6 @@ Rewritten so the atmega328 can be used as a stand alone replacement to the Ninte
 
 To use, hook up the following to the Arduino Atmega328
 Digital I/O 8:  N64 serial line
-Digital I/O 10: 220 ohm resistor to 2n2222 base, emitter to ground, collector to motor using 1N4007 flyback diode accross motor legs, and finally motor to 5v
-All appropriate grounding and power lines, joystick, and all buttons (all active low, see pin definitions in .ino)
+Digital I/O 10: All appropriate grounding and power lines, joystick, and all buttons (all active low, see pin definitions in .ino and wiring diagrams)
 
 Shoutout to <a href=https://bitbuilt.net/forums/index.php?members/pears.6450/>pears</a> from <a href=https://bitbuilt.net>bitbuilt.net</a> for testing.
